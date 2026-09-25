@@ -19,7 +19,8 @@ speler — en van waaruit je een nieuwe stem-ronde kunt starten.
 - **`admin.html`** — alleen voor jou, achter een wachtwoord. Toont wie nog moet stemmen,
   ieders gegeven ratings, het gemiddelde per speler, en de historie per ronde. Hiervandaan
   start je ook een nieuwe ronde (iedereen kan dan opnieuw stemmen, met hun vorige stem als
-  uitgangspunt).
+  uitgangspunt), en beheer je de spelerslijst zelf (zie hieronder) — de lijst staat niet
+  meer hardcoded in de code.
 - **`apps-script.gs`** — de backend (gratis Google Apps Script), verbonden aan een Google
   Sheet. Bewaart alles server-side: welk token bij welke naam hoort, het admin-wachtwoord,
   het huidige rondenummer, en elke stem als een nieuwe rij (nooit overschreven).
@@ -68,6 +69,15 @@ ronde het gemiddelde per speler, zodat je kunt zien hoe ratings zich ontwikkelen
 gewoon dezelfde persoonlijke links opnieuw — iedereen ziet zijn vorige stem terug en hoeft
 'm alleen aan te passen waar nodig.
 
+## Spelers toevoegen
+
+Ga naar `admin.html` → **"Spelers beheren"** → vul een naam in → **"Toevoegen"**. De app
+maakt automatisch een persoonlijke link voor die speler aan (kopieer 'm meteen met de
+knop ernaast, of later opnieuw via de "Link kopiëren"-knop naast elke naam). Bestaande
+stemmen blijven ongewijzigd; de nieuwe speler telt vanaf dat moment mee.
+
+Spelers verwijderen kan momenteel niet via de app.
+
 ### Ratings bekijken / exporteren naar Excel
 
 Open de Google Sheet (tabblad **Ratings**) voor de ruwe, volledige geschiedenis van elke
@@ -76,4 +86,5 @@ dashboard (gemiddeldes, wie mist, historie) gebruik je `admin.html`.
 
 ## Spelers
 
+Startlijst (aan te passen via `admin.html`, zie "Spelers toevoegen" hierboven):
 Arhan, David, Henoch, Jan, Jasper, John, Just, Mathew, Mesach, Stephan, Tom B, Tom P
