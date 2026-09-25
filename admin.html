@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ranking The Stars — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f6f4;
+    --surface: #ffffff;
+    --surface-2: #f0f1ee;
+    --border: #e3e5e1;
+    --text: #16181c;
+    --text-dim: #6b7078;
+    --text-faint: #9ba0a8;
+    --accent: #16a34a;
+    --accent-ink: #ffffff;
+    --accent-soft: #e8f6ee;
+    --gold: #eab308;
+    --gold-soft: #fef9e7;
+    --danger: #dc2626;
+    --danger-soft: #fdecec;
+    --shadow: 0 1px 2px rgba(20,20,20,.04), 0 4px 16px rgba(20,20,20,.06);
+    --radius: 16px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115;
+      --surface: #181b20;
+      --surface-2: #1f232a;
+      --border: #2a2f37;
+      --text: #f2f3f5;
+      --text-dim: #9aa1ac;
+      --text-faint: #6b7280;
+      --accent: #22c55e;
+      --accent-ink: #08130c;
+      --accent-soft: #143323;
+      --gold: #facc15;
+      --gold-soft: #2c2712;
+      --danger: #f87171;
+      --danger-soft: #2c1616;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  header { margin-bottom: 22px; }
+  header h1 { font-size: 21px; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
+  header p { margin: 2px 0 0; font-size: 13px; color: var(--text-dim); }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .section-title { display: flex; align-items: center; justify-content: space-between; margin: 26px 0 10px; }
+  .section-title h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); margin: 0; }
+  .section-title:first-child { margin-top: 0; }
+  .pill { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 100px; background: var(--surface-2); color: var(--text-dim); }
+  .pill.ready { background: var(--accent-soft); color: var(--accent); }
+  .pill.warn { background: var(--danger-soft); color: var(--danger); }
+
+  .btn {
+    border: none; border-radius: 14px; padding: 13px 16px; font-size: 14.5px; font-weight: 700;
+    font-family: inherit; cursor: pointer; transition: filter .15s, transform .05s;
+  }
+  .btn:active { transform: scale(.98); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.ghost { background: var(--surface-2); color: var(--text); }
+  .btn.block { width: 100%; }
+
+  /* ---------- login ---------- */
+  .login-card { padding: 20px; margin-top: 40px; }
+  .login-card label { display: block; font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+  .login-card input {
+    width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text); font-family: inherit; font-size: 15px; font-weight: 600; margin-bottom: 12px;
+  }
+  .login-error { font-size: 13px; font-weight: 600; color: var(--danger); margin: 0 0 10px; }
+
+  /* ---------- ronde-banner ---------- */
+  .ronde-card { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .ronde-label { font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
+  .ronde-num { font-size: 18px; font-weight: 800; }
+
+  /* ---------- missing / voted ---------- */
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-size: 12.5px; font-weight: 600; padding: 5px 10px; border-radius: 100px;
+    background: var(--surface-2); color: var(--text-dim);
+  }
+  .chip.missing { background: var(--danger-soft); color: var(--danger); }
+  .chip.voted { background: var(--accent-soft); color: var(--accent); }
+  .empty-note { font-size: 13px; color: var(--text-faint); padding: 4px 2px; }
+
+  /* ---------- leaderboard ---------- */
+  table { width: 100%; border-collapse: collapse; }
+  .lb-card { padding: 6px 4px; }
+  .lb-card table td, .lb-card table th { padding: 10px 12px; font-size: 13.5px; }
+  .lb-card th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-faint); font-weight: 700; }
+  .lb-card tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+  .lb-rank { color: var(--text-faint); font-weight: 700; width: 24px; }
+  .lb-name { font-weight: 700; }
+  .lb-avg { font-weight: 800; color: var(--gold); text-align: right; }
+  .lb-count { color: var(--text-faint); text-align: right; font-size: 12px; }
+
+  /* ---------- voters ---------- */
+  .voter-card { padding: 12px 14px; margin-bottom: 8px; }
+  .voter-hd { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+  .voter-name { font-weight: 700; font-size: 14px; }
+  .voter-time { font-size: 11.5px; color: var(--text-faint); }
+  .voter-ratings { display: none; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 6px 10px; margin-top: 10px; font-size: 12.5px; }
+  .voter-ratings.open { display: grid; }
+  .voter-ratings .r-name { color: var(--text-dim); }
+  .voter-ratings .r-val { font-weight: 700; color: var(--gold); }
+
+  /* ---------- historie ---------- */
+  .history-scroll { overflow-x: auto; }
+  .history-scroll table { min-width: 100%; }
+  .history-scroll th, .history-scroll td { padding: 8px 10px; font-size: 12.5px; white-space: nowrap; }
+  .history-scroll th { text-align: left; color: var(--text-faint); font-weight: 700; }
+  .history-scroll td.hname { font-weight: 600; position: sticky; left: 0; background: var(--surface); }
+
+  .status-msg {
+    text-align: center; font-size: 13px; font-weight: 600; color: var(--text-dim);
+    margin-top: 10px; opacity: 0; transition: opacity .2s; height: 0; overflow: hidden;
+  }
+  .status-msg.show { opacity: 1; height: auto; padding: 2px 0; }
+  .status-msg.error { color: var(--danger); }
+
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Ranking The Stars</h1>
+    <p>Admin-overzicht</p>
+  </header>
+
+  <!-- ===================== LOGIN ===================== -->
+  <main id="view-login">
+    <div class="card login-card">
+      <label for="pwInput">Admin-wachtwoord</label>
+      <input type="password" id="pwInput" autocomplete="current-password">
+      <p class="login-error" id="loginError" hidden></p>
+      <button class="btn primary block" id="loginBtn">Inloggen</button>
+    </div>
+  </main>
+
+  <!-- ===================== DASHBOARD ===================== -->
+  <main id="view-dashboard" hidden>
+    <div class="card ronde-card">
+      <div>
+        <div class="ronde-label">Huidige ronde</div>
+        <div class="ronde-num" id="rondeNum">—</div>
+      </div>
+      <button class="btn ghost" id="newRoundBtn">Nieuwe ronde starten</button>
+    </div>
+    <p class="status-msg" id="statusMsg"></p>
+
+    <div class="section-title">
+      <h2>Nog niet gestemd</h2>
+      <span class="pill" id="missingCount">0</span>
+    </div>
+    <div class="chip-row" id="missingChips"></div>
+
+    <div class="section-title">
+      <h2>Gemiddelde rating</h2>
+      <span class="pill" id="votedCount">0/0 gestemd</span>
+    </div>
+    <div class="card lb-card">
+      <table>
+        <thead><tr><th></th><th>Speler</th><th style="text-align:right">Gem.</th><th style="text-align:right">Stemmen</th></tr></thead>
+        <tbody id="leaderboardBody"></tbody>
+      </table>
+    </div>
+
+    <div class="section-title">
+      <h2>Wie gaf welke rating</h2>
+    </div>
+    <div id="votersList"></div>
+
+    <div class="section-title">
+      <h2>Historie per ronde</h2>
+    </div>
+    <div class="card history-scroll">
+      <table id="historyTable"></table>
+    </div>
+  </main>
+
+</div>
+
+<script src="config.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const $ = (s, r) => (r || document).querySelector(s);
+  const viewLogin = $("#view-login"), viewDashboard = $("#view-dashboard");
+  const statusMsg = $("#statusMsg");
+
+  function showStatus(msg, isError) {
+    statusMsg._t && clearTimeout(statusMsg._t);
+    statusMsg.textContent = msg;
+    statusMsg.classList.toggle("error", !!isError);
+    statusMsg.classList.toggle("show", !!msg);
+    if (msg) statusMsg._t = setTimeout(() => statusMsg.classList.remove("show"), 3000);
+  }
+
+  function fmt(v) { return v === null || v === undefined ? "–" : Number(v).toFixed(1); }
+
+  function render(data) {
+    $("#rondeNum").textContent = "Ronde " + data.ronde;
+
+    $("#missingCount").textContent = data.missing.length;
+    $("#missingChips").innerHTML = data.missing.length
+      ? data.missing.map((n) => `<span class="chip missing">${n}</span>`).join("")
+      : `<p class="empty-note">Iedereen heeft deze ronde al gestemd 🎉</p>`;
+
+    $("#votedCount").textContent = `${data.voted.length}/${data.players.length} gestemd`;
+
+    $("#leaderboardBody").innerHTML = data.leaderboard.map((row, i) => `
+      <tr>
+        <td class="lb-rank">${i + 1}</td>
+        <td class="lb-name">${row.name}</td>
+        <td class="lb-avg">${fmt(row.average)}</td>
+        <td class="lb-count">${row.count}</td>
+      </tr>`).join("");
+
+    $("#votersList").innerHTML = data.voters.length
+      ? data.voters.map((v, i) => {
+          const ratingsHtml = data.players
+            .filter((p) => p !== v.rater)
+            .map((p) => `<div class="r-name">${p}</div><div class="r-val">${v.ratings[p] === "" || v.ratings[p] == null ? "–" : Number(v.ratings[p]).toFixed(1)}</div>`)
+            .join("");
+          const when = v.timestamp ? new Date(v.timestamp).toLocaleString("nl-NL") : "";
+          return `
+            <div class="card voter-card">
+              <div class="voter-hd" data-i="${i}">
+                <span class="voter-name">${v.rater}</span>
+                <span class="voter-time">${when}</span>
+              </div>
+              <div class="voter-ratings" id="voter-ratings-${i}">${ratingsHtml}</div>
+            </div>`;
+        }).join("")
+      : `<p class="empty-note">Nog geen stemmen deze ronde.</p>`;
+
+    $("#votersList").querySelectorAll(".voter-hd").forEach((hd) => {
+      hd.addEventListener("click", () => {
+        $("#voter-ratings-" + hd.dataset.i).classList.toggle("open");
+      });
+    });
+
+    const table = $("#historyTable");
+    if (!data.roundHistory.length) {
+      table.innerHTML = `<tr><td style="padding:12px;color:var(--text-faint);font-size:13px;">Nog geen historie.</td></tr>`;
+    } else {
+      const head = `<tr><th class="hname">Speler</th>${data.roundHistory.map((r) => `<th>Ronde ${r.ronde}</th>`).join("")}</tr>`;
+      const body = data.players.map((p) => `
+        <tr><td class="hname">${p}</td>${data.roundHistory.map((r) => `<td>${fmt(r.averages[p])}</td>`).join("")}</tr>`).join("");
+      table.innerHTML = head + body;
+    }
+  }
+
+  async function loadDashboard(password, { silent } = {}) {
+    if (!GOOGLE_SCRIPT_URL) {
+      $("#loginError").textContent = "Opslag is nog niet geconfigureerd (config.js).";
+      $("#loginError").hidden = false;
+      return;
+    }
+    try {
+      const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=admin&password=${encodeURIComponent(password)}`);
+      const data = await res.json();
+      if (!data.ok) {
+        if (!silent) {
+          $("#loginError").textContent = data.message || "Verkeerd wachtwoord.";
+          $("#loginError").hidden = false;
+        }
+        return false;
+      }
+      sessionStorage.setItem("adminPassword", password);
+      render(data);
+      viewLogin.hidden = true;
+      viewDashboard.hidden = false;
+      return true;
+    } catch (err) {
+      if (!silent) {
+        $("#loginError").textContent = "Kon niet verbinden. Probeer opnieuw.";
+        $("#loginError").hidden = false;
+      }
+      return false;
+    }
+  }
+
+  $("#loginBtn").addEventListener("click", () => {
+    $("#loginError").hidden = true;
+    loadDashboard($("#pwInput").value);
+  });
+  $("#pwInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("#loginBtn").click();
+  });
+
+  $("#newRoundBtn").addEventListener("click", async () => {
+    const password = sessionStorage.getItem("adminPassword") || "";
+    if (!confirm("Weet je zeker dat je een nieuwe ronde wilt starten? Iedereen kan daarna opnieuw stemmen (hun vorige stem blijft zichtbaar als uitgangspunt).")) return;
+    try {
+      const res = await fetch(GOOGLE_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "new_round", password }),
+      });
+      const data = await res.json();
+      if (!data.ok) { showStatus(data.message || "Kon geen nieuwe ronde starten.", true); return; }
+      showStatus(`Ronde ${data.ronde} gestart.`);
+      loadDashboard(password, { silent: true });
+    } catch (err) {
+      showStatus("Kon niet verbinden. Probeer opnieuw.", true);
+    }
+  });
+
+  /* ============================================================
+     INIT — probeer eerder onthouden wachtwoord (deze browsersessie)
+     ============================================================ */
+  const remembered = sessionStorage.getItem("adminPassword");
+  if (remembered) {
+    loadDashboard(remembered, { silent: true }).then((ok) => {
+      if (!ok) sessionStorage.removeItem("adminPassword");
+    });
+  }
+})();
+</script>
+</body>
+</html>

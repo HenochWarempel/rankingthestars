@@ -71,16 +71,11 @@
   }
   .pill.ready { background: var(--accent-soft); color: var(--accent); }
 
-  /* ---------- naam-select ---------- */
-  .select-card { padding: 14px; }
-  .select-card label { display: block; font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
-  select#raterSelect {
-    width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border);
-    background: var(--surface-2); color: var(--text); font-family: inherit; font-size: 15px; font-weight: 600;
-    appearance: none; -webkit-appearance: none;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7078' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
-    background-repeat: no-repeat; background-position: right 12px center; background-size: 18px;
-  }
+  /* ---------- wie stemt (vervangt de vroegere naam-dropdown) ---------- */
+  .whoami-card { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .whoami-label { font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
+  .whoami-name { font-size: 17px; font-weight: 800; }
+  .prev-hint { font-size: 12.5px; color: var(--text-dim); margin: 8px 2px 0; }
 
   /* ---------- roster / rating rows ---------- */
   #roster { display: flex; flex-direction: column; gap: 8px; }
@@ -146,11 +141,11 @@
   .status-msg.show { opacity: 1; height: auto; padding: 2px 0; }
   .status-msg.error { color: var(--danger); }
 
-  /* ---------- thanks view ---------- */
-  #view-thanks { text-align: center; padding: 60px 10px 0; }
-  #view-thanks .ico { font-size: 46px; }
-  #view-thanks h2 { font-size: 20px; font-weight: 800; margin: 14px 0 6px; }
-  #view-thanks p { font-size: 14px; color: var(--text-dim); margin: 0 0 24px; }
+  /* ---------- info-scherm (bedankt / geen link / laden) ---------- */
+  .info-screen { text-align: center; padding: 60px 10px 0; }
+  .info-screen .ico { font-size: 46px; }
+  .info-screen h2 { font-size: 20px; font-weight: 800; margin: 14px 0 6px; }
+  .info-screen p { font-size: 14px; color: var(--text-dim); margin: 0 0 24px; }
 
   [hidden] { display: none !important; }
 </style>
@@ -164,17 +159,26 @@
   </header>
   <p class="status-msg" id="statusMsg"></p>
 
+  <!-- ===================== LADEN ===================== -->
+  <main id="view-loading" class="info-screen">
+    <div class="ico">⏳</div>
+    <h2>Bezig met laden…</h2>
+  </main>
+
+  <!-- ===================== GEEN (GELDIGE) LINK ===================== -->
+  <main id="view-no-token" class="info-screen" hidden>
+    <div class="ico">🔒</div>
+    <h2>Persoonlijke link nodig</h2>
+    <p id="noTokenMsg">Deze pagina werkt alleen via jouw eigen stem-link. Vraag die aan degene die de ranking organiseert.</p>
+  </main>
+
   <!-- ===================== RANK-SCHERM ===================== -->
-  <main id="view-rate">
-    <div class="section-title">
-      <h2>Wie ben jij?</h2>
+  <main id="view-rate" hidden>
+    <div class="card whoami-card">
+      <span class="whoami-label">Jij stemt als</span>
+      <span class="whoami-name" id="whoamiName"></span>
     </div>
-    <div class="card select-card">
-      <label for="raterSelect">Jouw naam</label>
-      <select id="raterSelect">
-        <option value="" disabled selected>Kies je naam…</option>
-      </select>
-    </div>
+    <p class="prev-hint" id="prevHint" hidden></p>
 
     <div class="section-title">
       <h2>Rank de spelers</h2>
@@ -186,15 +190,15 @@
     <div class="btnrow">
       <button class="btn primary" id="rankBtn" style="flex:1" disabled>Rank!</button>
     </div>
-    <p class="hint">Selecteer eerst je naam en geef daarna alle andere spelers 1 t/m 10 sterren</p>
+    <p class="hint">Geef alle andere spelers 1 t/m 10 sterren</p>
   </main>
 
   <!-- ===================== BEDANKT-SCHERM ===================== -->
-  <main id="view-thanks" hidden>
+  <main id="view-thanks" class="info-screen" hidden>
     <div class="ico">⭐</div>
     <h2>Bedankt voor het ranken!</h2>
     <p>Je ratings zijn opgeslagen.</p>
-    <button class="btn ghost" id="againBtn">↩ Nog een keer ranken</button>
+    <button class="btn ghost" id="againBtn">↩ Terug naar mijn stem</button>
   </main>
 
 </div>
@@ -221,10 +225,11 @@
   const $ = (s, r) => (r || document).querySelector(s);
 
   const roster = $("#roster"), counter = $("#counter"), rankBtn = $("#rankBtn"), statusMsg = $("#statusMsg");
-  const raterSelect = $("#raterSelect");
-  const viewRate = $("#view-rate"), viewThanks = $("#view-thanks");
+  const viewLoading = $("#view-loading"), viewNoToken = $("#view-no-token"), viewRate = $("#view-rate"), viewThanks = $("#view-thanks");
 
+  const token = new URLSearchParams(location.search).get("t");
   let rater = "";
+  let currentRonde = 1;
   const ratings = {}; // { playerName: 1-10 }
 
   function flashMsg(el, msg, isError) {
@@ -236,12 +241,13 @@
   }
   const showStatus = (msg, isError) => flashMsg(statusMsg, msg, isError);
 
-  function buildRaterSelect() {
-    raterSelect.innerHTML = `<option value="" disabled ${rater ? "" : "selected"}>Kies je naam…</option>` +
-      PLAYERS.map((p) => `<option value="${p}" ${p === rater ? "selected" : ""}>${p}</option>`).join("");
+  function showNoToken(msg) {
+    viewLoading.hidden = true;
+    viewNoToken.hidden = false;
+    if (msg) $("#noTokenMsg").textContent = msg;
   }
 
-  function starsHTML(player, value) {
+  function starsHTML(value) {
     let html = "";
     for (let i = 1; i <= 10; i++) {
       const clipRight = (1 - starFraction(value, i)) * 100;
@@ -277,7 +283,7 @@
             <div class="pname">${p}</div>
             <span class="score-tag ${value ? "set" : ""}" id="tag-${cssId(p)}">${value ? formatScore(value) : "—"}</span>
           </div>
-          <div class="stars" id="stars-${cssId(p)}" data-player="${p}">${starsHTML(p, value)}</div>
+          <div class="stars" id="stars-${cssId(p)}" data-player="${p}">${starsHTML(value)}</div>
         </div>`;
     }).join("");
 
@@ -363,35 +369,26 @@
     const others = othersToRate();
     const done = others.filter((p) => ratings[p]).length;
     counter.textContent = `${done}/${others.length} gerankt`;
-    counter.classList.toggle("ready", rater && done === others.length);
-    rankBtn.disabled = !(rater && done === others.length);
+    counter.classList.toggle("ready", done === others.length);
+    rankBtn.disabled = !(done === others.length);
   }
 
-  raterSelect.addEventListener("change", () => {
-    rater = raterSelect.value;
-    for (const k in ratings) delete ratings[k];
-    buildRoster();
-    updateCounter();
-  });
-
   async function submitRatings() {
-    if (!GOOGLE_SCRIPT_URL) {
-      showStatus("Opslag is nog niet geconfigureerd (config.js).", true);
-      return;
-    }
     rankBtn.disabled = true;
     rankBtn.textContent = "Bezig…";
     try {
-      await fetch(GOOGLE_SCRIPT_URL, {
+      const res = await fetch(GOOGLE_SCRIPT_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ rater, ratings }),
+        body: JSON.stringify({ token, ratings }),
       });
+      const data = await res.json();
+      if (data.status !== "ok") throw new Error(data.message || "Opslaan mislukt");
       viewRate.hidden = true;
       viewThanks.hidden = false;
       window.scrollTo(0, 0);
     } catch (err) {
-      showStatus("Opslaan mislukt. Controleer je internetverbinding.", true);
+      showStatus("Opslaan mislukt. Controleer je internetverbinding en probeer opnieuw.", true);
       rankBtn.disabled = false;
       rankBtn.textContent = "Rank!";
     }
@@ -400,23 +397,52 @@
   rankBtn.addEventListener("click", submitRatings);
 
   $("#againBtn").addEventListener("click", () => {
-    rater = "";
-    for (const k in ratings) delete ratings[k];
-    buildRaterSelect();
-    buildRoster();
-    updateCounter();
     rankBtn.textContent = "Rank!";
+    updateCounter();
     viewThanks.hidden = true;
     viewRate.hidden = false;
     window.scrollTo(0, 0);
   });
 
   /* ============================================================
-     INIT
+     INIT — herkent de gebruiker via zijn persoonlijke ?t=token link
      ============================================================ */
-  buildRaterSelect();
-  buildRoster();
-  updateCounter();
+  async function init() {
+    if (!token || !GOOGLE_SCRIPT_URL) {
+      showNoToken();
+      return;
+    }
+    try {
+      const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=vote&token=${encodeURIComponent(token)}`);
+      const data = await res.json();
+      if (!data.ok) { showNoToken(); return; }
+
+      rater = data.name;
+      currentRonde = data.ronde;
+      if (data.previous) {
+        PLAYERS.forEach((p) => {
+          const v = data.previous[p];
+          if (v !== "" && v !== null && v !== undefined) ratings[p] = Number(v);
+        });
+      }
+
+      $("#whoamiName").textContent = rater;
+      if (data.previousAt) {
+        const d = new Date(data.previousAt);
+        $("#prevHint").textContent = `Je stemde eerder op ${d.toLocaleDateString("nl-NL")} — dit zijn je ratings van toen, pas ze aan waar gewenst.`;
+        $("#prevHint").hidden = false;
+      }
+
+      buildRoster();
+      updateCounter();
+      viewLoading.hidden = true;
+      viewRate.hidden = false;
+    } catch (err) {
+      showNoToken("Kon je gegevens niet laden. Controleer je internetverbinding en probeer het opnieuw.");
+    }
+  }
+
+  init();
 })();
 </script>
 </body>
