@@ -93,6 +93,26 @@
   .ronde-label { font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
   .ronde-num { font-size: 18px; font-weight: 800; }
 
+  /* ---------- spelers beheren ---------- */
+  .add-player-card { padding: 10px; display: flex; gap: 8px; }
+  .add-player-card input {
+    flex: 1; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text); font-family: inherit; font-size: 14.5px; font-weight: 600;
+  }
+  .add-player-card .btn { flex: none; }
+
+  .players-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .player-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 9px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  }
+  .player-row .pname { font-weight: 600; font-size: 13.5px; }
+  .copy-btn {
+    font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 100px;
+    background: var(--surface-2); color: var(--text-dim); border: none; cursor: pointer; flex: none;
+  }
+  .copy-btn.copied { background: var(--accent-soft); color: var(--accent); }
+
   /* ---------- missing / voted ---------- */
   .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip {
@@ -171,6 +191,15 @@
     <p class="status-msg" id="statusMsg"></p>
 
     <div class="section-title">
+      <h2>Spelers beheren</h2>
+    </div>
+    <div class="card add-player-card">
+      <input type="text" id="newPlayerInput" placeholder="Naam van nieuwe speler" autocomplete="off">
+      <button class="btn primary" id="addPlayerBtn">Toevoegen</button>
+    </div>
+    <div class="players-list" id="playersList"></div>
+
+    <div class="section-title">
       <h2>Nog niet gestemd</h2>
       <span class="pill" id="missingCount">0</span>
     </div>
@@ -223,6 +252,24 @@
 
   function render(data) {
     $("#rondeNum").textContent = "Ronde " + data.ronde;
+
+    $("#playersList").innerHTML = data.players.map((p) => `
+      <div class="player-row">
+        <span class="pname">${p}</span>
+        <button type="button" class="copy-btn" data-link="${(data.links && data.links[p]) || ""}">Link kopiëren</button>
+      </div>`).join("");
+    $("#playersList").querySelectorAll(".copy-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(btn.dataset.link);
+          btn.textContent = "Gekopieerd!";
+          btn.classList.add("copied");
+          setTimeout(() => { btn.textContent = "Link kopiëren"; btn.classList.remove("copied"); }, 1800);
+        } catch (err) {
+          showStatus("Kopiëren niet gelukt — link: " + btn.dataset.link, true);
+        }
+      });
+    });
 
     $("#missingCount").textContent = data.missing.length;
     $("#missingChips").innerHTML = data.missing.length
@@ -332,6 +379,33 @@
     } catch (err) {
       showStatus("Kon niet verbinden. Probeer opnieuw.", true);
     }
+  });
+
+  $("#addPlayerBtn").addEventListener("click", async () => {
+    const input = $("#newPlayerInput");
+    const name = input.value.trim();
+    if (!name) return;
+    const password = sessionStorage.getItem("adminPassword") || "";
+    $("#addPlayerBtn").disabled = true;
+    try {
+      const res = await fetch(GOOGLE_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "add_player", password, name }),
+      });
+      const data = await res.json();
+      if (!data.ok) { showStatus(data.message || "Kon speler niet toevoegen.", true); return; }
+      input.value = "";
+      showStatus(`${data.name} toegevoegd — kopieer de link hieronder en deel 'm.`);
+      await loadDashboard(password, { silent: true });
+    } catch (err) {
+      showStatus("Kon niet verbinden. Probeer opnieuw.", true);
+    } finally {
+      $("#addPlayerBtn").disabled = false;
+    }
+  });
+  $("#newPlayerInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("#addPlayerBtn").click();
   });
 
   /* ============================================================

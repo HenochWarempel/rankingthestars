@@ -4,7 +4,9 @@
 // Zie README.md voor de (eenmalige) installatie- en setup-stappen.
 // ============================================================
 
-var PLAYERS = ["Arhan", "David", "Henoch", "Jan", "Jasper", "John", "Just", "Mathew", "Mesach", "Stephan", "Tom B", "Tom P"];
+// Startlijst, alleen gebruikt om PLAYERS_LIST de allereerste keer te vullen.
+// Spelers daarna toevoegen doe je via admin.html ("Spelers beheren"), niet hier.
+var DEFAULT_PLAYERS = ["Arhan", "David", "Henoch", "Jan", "Jasper", "John", "Just", "Mathew", "Mesach", "Stephan", "Tom B", "Tom P"];
 var SHEET_NAME = "Ratings";
 
 // Pas dit aan naar de echte URL van je GitHub Pages-site als die afwijkt.
@@ -26,9 +28,10 @@ function setup() {
   if (!p.getProperty("CURRENT_ROUND")) {
     p.setProperty("CURRENT_ROUND", "1");
   }
+  var players = getPlayers_();
   var tokens = getTokenMap_();
   var changed = false;
-  PLAYERS.forEach(function (name) {
+  players.forEach(function (name) {
     var exists = Object.keys(tokens).some(function (t) { return tokens[t] === name; });
     if (!exists) {
       tokens[Utilities.getUuid().replace(/-/g, "")] = name;
@@ -57,7 +60,7 @@ function getPersonalLinks() {
   var tokens = getTokenMap_();
   var byName = {};
   Object.keys(tokens).forEach(function (t) { byName[tokens[t]] = t; });
-  PLAYERS.forEach(function (name) {
+  getPlayers_().forEach(function (name) {
     var token = byName[name];
     Logger.log(name + ": " + BASE_URL + "?t=" + token);
   });
@@ -68,6 +71,22 @@ function getPersonalLinks() {
    ============================================================ */
 
 function props_() { return PropertiesService.getScriptProperties(); }
+
+// De actuele spelerslijst; PLAYERS_LIST is de bron van waarheid nadat setup()
+// 'm de eerste keer heeft aangemaakt vanuit DEFAULT_PLAYERS. Nieuwe spelers
+// (via admin.html) worden hieraan toegevoegd, nooit door dit bestand te wijzigen.
+function getPlayers_() {
+  var raw = props_().getProperty("PLAYERS_LIST");
+  if (!raw) {
+    props_().setProperty("PLAYERS_LIST", JSON.stringify(DEFAULT_PLAYERS));
+    return DEFAULT_PLAYERS.slice();
+  }
+  return JSON.parse(raw);
+}
+
+function setPlayers_(list) {
+  props_().setProperty("PLAYERS_LIST", JSON.stringify(list));
+}
 
 function getTokenMap_() {
   var raw = props_().getProperty("TOKENS");
@@ -94,7 +113,7 @@ function getSheet_() {
   var sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
   if (sheet.getLastRow() === 0) {
-    sheet.appendRow(["Timestamp", "Ronde", "Rater"].concat(PLAYERS).concat(["RequestId"]));
+    sheet.appendRow(["Timestamp", "Ronde", "Rater"].concat(getPlayers_()).concat(["RequestId"]));
     sheet.setFrozenRows(1);
   } else {
     ensureSchema_(sheet);
@@ -124,13 +143,14 @@ function ensureSchema_(sheet) {
 
 function readRows_() {
   var sheet = getSheet_();
+  var players = getPlayers_();
   var values = sheet.getDataRange().getValues();
   var rows = [];
-  var ridx = 3 + PLAYERS.length;
+  var ridx = 3 + players.length;
   for (var i = 1; i < values.length; i++) {
     var r = values[i];
     var ratings = {};
-    for (var j = 0; j < PLAYERS.length; j++) ratings[PLAYERS[j]] = r[3 + j];
+    for (var j = 0; j < players.length; j++) ratings[players[j]] = r[3 + j];
     rows.push({ timestamp: r[0], ronde: Number(r[1]) || 1, rater: r[2], ratings: ratings, requestId: r[ridx] || "" });
   }
   return rows;
@@ -182,6 +202,7 @@ function doPost(e) {
   if (data.action === "vote") return jsonOut_(handleVoteLookup_(data.token));
   if (data.action === "admin") return jsonOut_(handleAdmin_(data.password));
   if (data.action === "new_round") return jsonOut_(handleNewRound_(data.password));
+  if (data.action === "add_player") return jsonOut_(handleAddPlayer_(data.password, data.name));
   return jsonOut_(handleSubmit_(data));
 }
 
@@ -193,10 +214,38 @@ function handleVoteLookup_(token) {
   return {
     ok: true,
     name: name,
+    players: getPlayers_(), // de stempagina houdt zelf geen spelerslijst meer bij
     ronde: getCurrentRound_(),
     previous: latest ? latest.ratings : null,
     previousAt: latest ? latest.timestamp : null,
   };
+}
+
+function handleAddPlayer_(password, rawName) {
+  if (!checkAdminPassword_(password)) return { ok: false, message: "Verkeerd wachtwoord." };
+  var name = String(rawName || "").trim();
+  if (!name) return { ok: false, message: "Vul een naam in." };
+
+  var players = getPlayers_();
+  var exists = players.some(function (p) { return p.toLowerCase() === name.toLowerCase(); });
+  if (exists) return { ok: false, message: "Die naam bestaat al." };
+
+  // Nieuwe kolom vóór RequestId invoegen, zodat bestaande rijen automatisch
+  // een lege waarde krijgen voor deze speler (net als bij elke nieuwe ronde).
+  var sheet = getSheet_();
+  var requestIdCol = sheet.getLastColumn();
+  sheet.insertColumnBefore(requestIdCol);
+  sheet.getRange(1, requestIdCol).setValue(name);
+
+  players.push(name);
+  setPlayers_(players);
+
+  var tokens = getTokenMap_();
+  var token = Utilities.getUuid().replace(/-/g, "");
+  tokens[token] = name;
+  props_().setProperty("TOKENS", JSON.stringify(tokens));
+
+  return { ok: true, name: name, link: BASE_URL + "?t=" + token };
 }
 
 function handleSubmit_(data) {
@@ -215,7 +264,7 @@ function handleSubmit_(data) {
 
   var sheet = getSheet_();
   var row = [new Date(), getCurrentRound_(), name];
-  PLAYERS.forEach(function (p) {
+  getPlayers_().forEach(function (p) {
     if (p === name) { row.push(""); return; }
     var v = data.ratings ? data.ratings[p] : undefined;
     row.push(v === undefined || v === null || v === "" ? "" : Number(v));
@@ -235,14 +284,15 @@ function handleNewRound_(password) {
 function handleAdmin_(password) {
   if (!checkAdminPassword_(password)) return { ok: false, message: "Verkeerd wachtwoord." };
 
+  var players = getPlayers_();
   var rows = readRows_();
   var round = getCurrentRound_();
   var latestThisRound = latestPerRater_(rows, round);
 
-  var voted = PLAYERS.filter(function (p) { return !!latestThisRound[p]; });
-  var missing = PLAYERS.filter(function (p) { return !latestThisRound[p]; });
+  var voted = players.filter(function (p) { return !!latestThisRound[p]; });
+  var missing = players.filter(function (p) { return !latestThisRound[p]; });
 
-  var leaderboard = PLAYERS.map(function (target) {
+  var leaderboard = players.map(function (target) {
     var stats = averageReceived_(latestThisRound, target);
     return { name: target, average: stats.average, count: stats.count };
   }).sort(function (a, b) { return (b.average === null ? -1 : b.average) - (a.average === null ? -1 : a.average); });
@@ -256,16 +306,23 @@ function handleAdmin_(password) {
   var roundHistory = Object.keys(roundsSeen).map(Number).sort(function (a, b) { return a - b; }).map(function (rnd) {
     var latestForRound = latestPerRater_(rows, rnd);
     var perPlayer = {};
-    PLAYERS.forEach(function (target) {
+    players.forEach(function (target) {
       perPlayer[target] = averageReceived_(latestForRound, target).average;
     });
     return { ronde: rnd, averages: perPlayer };
   });
 
+  var tokens = getTokenMap_();
+  var tokenByName = {};
+  Object.keys(tokens).forEach(function (t) { tokenByName[tokens[t]] = t; });
+  var links = {};
+  players.forEach(function (p) { links[p] = BASE_URL + "?t=" + (tokenByName[p] || ""); });
+
   return {
     ok: true,
     ronde: round,
-    players: PLAYERS,
+    players: players,
+    links: links,
     voted: voted,
     missing: missing,
     leaderboard: leaderboard,
