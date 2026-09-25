@@ -1,8 +1,9 @@
 # Ranking The Stars
 
 Simpele rating-app: iedereen selecteert zijn eigen naam en geeft de andere spelers een
-rating van 1 t/m 10 sterren. Alle ratings worden opgeslagen in een Google Sheet, die je
-direct kunt inzien en met één klik kunt exporteren naar Excel.
+rating van 1 t/m 10 sterren (halve sterren mogen ook — tik op de linkerhelft van een ster
+voor een halve, rechts voor een hele). Alle ratings worden opgeslagen in een Google Sheet,
+die je direct kunt inzien en met één klik kunt exporteren naar Excel.
 
 ## Spelen
 
