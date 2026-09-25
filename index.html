@@ -102,20 +102,30 @@
   .prow.self .pname { text-decoration: line-through; color: var(--text-dim); }
   .self-tag { font-size: 11px; font-weight: 700; color: var(--text-faint); background: var(--surface-2); padding: 3px 8px; border-radius: 100px; flex: none; }
 
-  .stars { display: flex; gap: 3px; margin-top: 8px; }
+  .stars { display: flex; gap: 3px; margin-top: 8px; padding: 10px 0 6px; }
   .star-btn {
     position: relative; flex: 1; max-width: 26px; height: 22px; padding: 0; border: none;
-    background: none; cursor: pointer; transition: transform .05s;
+    background: none; cursor: pointer; transition: transform .12s cubic-bezier(.34,1.56,.64,1);
+    transform-origin: center;
   }
   .star-btn:active { transform: scale(.9); }
+  .star-btn.hovered { transform: scale(1.55); z-index: 3; }
   .star-btn::after {
-    /* subtle divider marking the half-star tap zone */
+    /* divider marking the half-star tap zone, more visible while hovered */
     content: ""; position: absolute; left: 50%; top: 15%; bottom: 15%; width: 1px;
-    background: var(--surface); opacity: .55; pointer-events: none;
+    background: var(--surface); opacity: .55; pointer-events: none; transition: opacity .12s;
   }
+  .star-btn.hovered::after { opacity: .9; width: 1.5px; }
   .star-ico { position: absolute; inset: 0; width: 100%; height: 100%; }
   .star-ico.bg { color: var(--border); }
   .star-ico.fg { color: var(--gold); }
+  .star-zone {
+    position: absolute; bottom: -5px; height: 3px; width: 42%; border-radius: 2px;
+    background: var(--gold); opacity: 0; transition: opacity .1s; pointer-events: none;
+  }
+  .star-zone.left { left: 2%; }
+  .star-zone.right { right: 2%; }
+  .star-zone.active { opacity: 1; }
   .star-hint { font-size: 11.5px; color: var(--text-faint); margin: -4px 0 12px; }
 
   /* ---------- buttons ---------- */
@@ -236,9 +246,11 @@
     for (let i = 1; i <= 10; i++) {
       const clipRight = (1 - starFraction(value, i)) * 100;
       html += `
-        <button type="button" class="star-btn" data-player="${player}" data-value="${i}" aria-label="${i} sterren (tik links voor ${i - 0.5})">
+        <button type="button" class="star-btn" data-value="${i}" aria-label="${i} sterren (tik links voor ${i - 0.5})">
           <svg class="star-ico bg" viewBox="0 0 24 24" fill="currentColor" stroke="none">${STAR_PATH}</svg>
           <svg class="star-ico fg" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="clip-path: inset(0 ${clipRight}% 0 0)">${STAR_PATH}</svg>
+          <span class="star-zone left"></span>
+          <span class="star-zone right"></span>
         </button>`;
     }
     return html;
@@ -265,36 +277,58 @@
             <div class="pname">${p}</div>
             <span class="score-tag ${value ? "set" : ""}" id="tag-${cssId(p)}">${value ? formatScore(value) : "—"}</span>
           </div>
-          <div class="stars" id="stars-${cssId(p)}">${starsHTML(p, value)}</div>
+          <div class="stars" id="stars-${cssId(p)}" data-player="${p}">${starsHTML(p, value)}</div>
         </div>`;
     }).join("");
 
-    // klikpositie binnen de ster bepaalt half (linkerhelft) of heel (rechterhelft)
-    function valueFromEvent(btn, e) {
+    // positie (muis of vinger) binnen de ster bepaalt half (linkerhelft) of heel (rechterhelft)
+    function valueAtX(btn, clientX) {
       const i = +btn.dataset.value;
-      if (e.detail === 0) return i; // toetsenbord-activatie (Enter/Space): hele ster
       const rect = btn.getBoundingClientRect();
-      const fraction = (e.clientX - rect.left) / rect.width;
+      const fraction = (clientX - rect.left) / rect.width;
       return fraction <= 0.5 ? i - 0.5 : i;
     }
 
+    // ster onder de cursor/vinger licht op, vergroot, en toont welke helft je zou kiezen
+    function hoverStar(row, btn, clientX) {
+      const value = valueAtX(btn, clientX);
+      row.querySelectorAll(".star-btn").forEach((b) => b.classList.toggle("hovered", b === btn));
+      row.querySelectorAll(".star-zone").forEach((z) => z.classList.remove("active"));
+      btn.querySelector(value % 1 !== 0 ? ".star-zone.left" : ".star-zone.right").classList.add("active");
+      previewStars(row.dataset.player, value);
+    }
+
+    function clearHover(row) {
+      row.querySelectorAll(".star-btn").forEach((b) => b.classList.remove("hovered"));
+      row.querySelectorAll(".star-zone").forEach((z) => z.classList.remove("active"));
+      renderStars(row.dataset.player);
+    }
+
     roster.querySelectorAll(".star-btn").forEach((btn) => {
+      const row = btn.closest(".stars");
       btn.addEventListener("click", (e) => {
-        const player = btn.dataset.player;
-        ratings[player] = valueFromEvent(btn, e);
-        renderStars(player);
+        const player = row.dataset.player;
+        ratings[player] = e.detail === 0 ? +btn.dataset.value : valueAtX(btn, e.clientX); // detail 0 = toetsenbord-activatie
+        clearHover(row);
         updateCounter();
       });
-      btn.addEventListener("mousemove", (e) => {
-        previewStars(btn.dataset.player, valueFromEvent(btn, e));
-      });
+      btn.addEventListener("mousemove", (e) => hoverStar(row, btn, e.clientX));
     });
 
     roster.querySelectorAll(".stars").forEach((row) => {
-      row.addEventListener("mouseleave", () => {
-        const player = row.id.replace(/^stars-/, "");
-        renderStars(PLAYERS.find((p) => cssId(p) === player));
-      });
+      row.addEventListener("mouseleave", () => clearHover(row));
+      row.addEventListener("touchstart", (e) => {
+        const t = e.touches[0];
+        const btn = document.elementFromPoint(t.clientX, t.clientY)?.closest(".star-btn");
+        if (btn && row.contains(btn)) hoverStar(row, btn, t.clientX);
+      }, { passive: true });
+      row.addEventListener("touchmove", (e) => {
+        const t = e.touches[0];
+        const btn = document.elementFromPoint(t.clientX, t.clientY)?.closest(".star-btn");
+        if (btn && row.contains(btn)) hoverStar(row, btn, t.clientX);
+      }, { passive: true });
+      row.addEventListener("touchend", () => clearHover(row));
+      row.addEventListener("touchcancel", () => clearHover(row));
     });
   }
 
