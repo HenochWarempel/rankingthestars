@@ -230,6 +230,19 @@
   const token = new URLSearchParams(location.search).get("t");
   let rater = "";
   let currentRonde = 1;
+  let lastRequestSnapshot = null;
+  let lastRequestId = null;
+
+  // Zelfde inhoud opnieuw versturen (automatische retry of handmatig nog eens
+  // klikken na een mislukte poging) hergebruikt hetzelfde id, zodat de server
+  // een eventuele dubbele rij kan herkennen en overslaan.
+  function requestIdFor(snapshot) {
+    if (lastRequestSnapshot !== snapshot) {
+      lastRequestSnapshot = snapshot;
+      lastRequestId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    return lastRequestId;
+  }
   const ratings = {}; // { playerName: 1-10 }
 
   function flashMsg(el, msg, isError) {
@@ -373,24 +386,38 @@
     rankBtn.disabled = !(done === others.length);
   }
 
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
   async function submitRatings() {
+    const requestId = requestIdFor(JSON.stringify(ratings));
+    const maxAttempts = 3;
     rankBtn.disabled = true;
-    rankBtn.textContent = "Bezig…";
-    try {
-      const res = await fetch(GOOGLE_SCRIPT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ token, ratings }),
-      });
-      const data = await res.json();
-      if (data.status !== "ok") throw new Error(data.message || "Opslaan mislukt");
-      viewRate.hidden = true;
-      viewThanks.hidden = false;
-      window.scrollTo(0, 0);
-    } catch (err) {
-      showStatus("Opslaan mislukt. Controleer je internetverbinding en probeer opnieuw.", true);
-      rankBtn.disabled = false;
-      rankBtn.textContent = "Rank!";
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      rankBtn.textContent = attempt === 1 ? "Bezig…" : `Opnieuw proberen… (${attempt}/${maxAttempts})`;
+      try {
+        const res = await fetch(GOOGLE_SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ token, ratings, requestId }),
+        });
+        const data = await res.json();
+        if (data.status !== "ok") throw new Error(data.message || "Opslaan mislukt");
+        viewRate.hidden = true;
+        viewThanks.hidden = false;
+        window.scrollTo(0, 0);
+        return;
+      } catch (err) {
+        if (attempt < maxAttempts) {
+          await sleep(1200 * attempt);
+          continue;
+        }
+        // requestId blijft staan: een handmatige nieuwe poging (nog eens op Rank! klikken)
+        // hergebruikt 'm, dus ook dan kan er nooit een dubbele stem ontstaan.
+        showStatus("Kon niet met zekerheid bevestigen dat het is opgeslagen. Probeer het nog eens — dat kan geen dubbele stem opleveren.", true);
+        rankBtn.disabled = false;
+        rankBtn.textContent = "Rank!";
+      }
     }
   }
 
