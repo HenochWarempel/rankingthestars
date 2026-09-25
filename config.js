@@ -6,4 +6,4 @@
 // Zolang dit leeg is, kan de app de ratings niet opslaan en
 // toont hij een waarschuwing bij de Rank!-knop.
 // ============================================================
-const GOOGLE_SCRIPT_URL = "";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxRCcrcpSgSrDumWkha3QggfN7GU42D1l27cW4BsFM7JwMtK46rpPrLdYb_8zGCMY4/exec";
