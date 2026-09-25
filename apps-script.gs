@@ -159,6 +159,11 @@ function jsonOut_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
+// doGet is alleen voor handmatig testen in de browser-adresbalk (handig om een
+// deployment te controleren). De site zelf gebruikt voor alles POST via doPost,
+// omdat GET-verzoeken via fetch() bij Apps Script Web Apps last hebben van een
+// CORS-probleem door de interne redirect (het lukt dan wel bij direct navigeren,
+// maar niet vanuit JavaScript).
 function doGet(e) {
   var action = e.parameter.action;
   if (action === "vote") return jsonOut_(handleVoteLookup_(e.parameter.token));
@@ -168,6 +173,8 @@ function doGet(e) {
 
 function doPost(e) {
   var data = JSON.parse(e.postData.contents);
+  if (data.action === "vote") return jsonOut_(handleVoteLookup_(data.token));
+  if (data.action === "admin") return jsonOut_(handleAdmin_(data.password));
   if (data.action === "new_round") return jsonOut_(handleNewRound_(data.password));
   return jsonOut_(handleSubmit_(data));
 }
