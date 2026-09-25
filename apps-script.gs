@@ -94,7 +94,7 @@ function getSheet_() {
   var sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
   if (sheet.getLastRow() === 0) {
-    sheet.appendRow(["Timestamp", "Ronde", "Rater"].concat(PLAYERS));
+    sheet.appendRow(["Timestamp", "Ronde", "Rater"].concat(PLAYERS).concat(["RequestId"]));
     sheet.setFrozenRows(1);
   } else {
     ensureSchema_(sheet);
@@ -102,18 +102,23 @@ function getSheet_() {
   return sheet;
 }
 
-// Migreert een sheet van vóór de rondes-functionaliteit (Timestamp, Rater, ...)
-// naar het nieuwe schema (Timestamp, Ronde, Rater, ...) zonder data te verliezen.
+// Migreert een sheet naar het huidige schema (Timestamp, Ronde, Rater, ...spelers,
+// RequestId) zonder data te verliezen, ongeacht van welke eerdere versie je komt.
 function ensureSchema_(sheet) {
   var header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  if (header[1] === "Ronde") return;
-  sheet.insertColumnAfter(1);
-  sheet.getRange(1, 2).setValue("Ronde");
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    var values = [];
-    for (var i = 0; i < lastRow - 1; i++) values.push([1]);
-    sheet.getRange(2, 2, lastRow - 1, 1).setValues(values);
+  if (header[1] !== "Ronde") {
+    sheet.insertColumnAfter(1);
+    sheet.getRange(1, 2).setValue("Ronde");
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      var values = [];
+      for (var i = 0; i < lastRow - 1; i++) values.push([1]);
+      sheet.getRange(2, 2, lastRow - 1, 1).setValues(values);
+    }
+  }
+  var lastCol = sheet.getLastColumn();
+  if (sheet.getRange(1, lastCol).getValue() !== "RequestId") {
+    sheet.getRange(1, lastCol + 1).setValue("RequestId");
   }
 }
 
@@ -121,11 +126,12 @@ function readRows_() {
   var sheet = getSheet_();
   var values = sheet.getDataRange().getValues();
   var rows = [];
+  var ridx = 3 + PLAYERS.length;
   for (var i = 1; i < values.length; i++) {
     var r = values[i];
     var ratings = {};
     for (var j = 0; j < PLAYERS.length; j++) ratings[PLAYERS[j]] = r[3 + j];
-    rows.push({ timestamp: r[0], ronde: Number(r[1]) || 1, rater: r[2], ratings: ratings });
+    rows.push({ timestamp: r[0], ronde: Number(r[1]) || 1, rater: r[2], ratings: ratings, requestId: r[ridx] || "" });
   }
   return rows;
 }
@@ -196,6 +202,17 @@ function handleVoteLookup_(token) {
 function handleSubmit_(data) {
   var name = nameForToken_(data.token);
   if (!name) return { status: "error", message: "Ongeldige link." };
+  var requestId = data.requestId || "";
+
+  // Idempotent: als deze submit (herkenbaar aan requestId) al eerder is verwerkt
+  // -bv. omdat het antwoord van een vorige poging de browser niet op tijd
+  // bereikte en de app daarom automatisch opnieuw probeerde- voegen we geen
+  // tweede rij toe, maar melden we gewoon succes.
+  if (requestId) {
+    var already = readRows_().some(function (r) { return r.requestId === requestId; });
+    if (already) return { status: "ok" };
+  }
+
   var sheet = getSheet_();
   var row = [new Date(), getCurrentRound_(), name];
   PLAYERS.forEach(function (p) {
@@ -203,6 +220,7 @@ function handleSubmit_(data) {
     var v = data.ratings ? data.ratings[p] : undefined;
     row.push(v === undefined || v === null || v === "" ? "" : Number(v));
   });
+  row.push(requestId);
   sheet.appendRow(row);
   return { status: "ok" };
 }
